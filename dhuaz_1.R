@@ -1,3 +1,22 @@
+# install.packages("arules")
+# install.packages("arulesViz")
+# install.packages("tidyverse")
+# install.packages("knitr")
+#install.packages("RColorBrewer")
+# install.packages("stringr")
+
+library(knitr)
+library(ggplot2)
+library(lubridate)
+library(plyr)
+library(dplyr)
+library(tidyverse)
+library(arules)
+library(arulesViz)
+library(readxl)
+library(RColorBrewer)
+library(tidyr)
+
 require(dplyr)
 require("forecast")
 require(ggplot2)
@@ -118,12 +137,44 @@ for (i in 1:S)
   pedidos_dummy[[products[i]]]=pedidos_dummy$product_id==products[i]
 }
 
+pedidos_dummy %>% group_by(order_id) %>% summarise(sum())
+
 pedidos_dummy_s=pedidos_dummy %>% select(names(pedidos_dummy)[11:7208])
 
-pedidos_resumo=pedidos_dummy_s[,1:10] %>% group_by(across(everything())) %>% dplyr::summarise(n=n())
 
 
+pedidos_resumo=pedidos_dummy_s[1:10000,] %>% group_by(across(everything())) %>% dplyr::summarise(n=n())
 
+#-----------------------------------------------------------------------------------------------------------
+
+raw_data$product_id %>% unique() %>% length()
+
+pedidos=raw_data %>% group_by(order_id)  %>%  
+  dplyr::summarise(items=paste(sort(product_id),collapse = ","),n_items=dplyr::n()) %>% 
+  select(order_id,items,n_items)
+
+
+pedidos=pedidos %>% separate(items,sep = ",",into = paste0("item_",1:21))
+produtos=raw_data$product_id %>% unique()
+
+#------------------------item 3-------------------------------------------------------
+multi_items=filter(raw_data,order_id %in% filter(raw_data,order_item_id==2)$order_id)  
+
+multi_items %>% group_by(order_id)  %>%  
+  dplyr::summarise(items=paste(product_id,collapse = ",")) %>% 
+  select(items) %>%  write.csv("./Dhuaz desafio/Dhuaz_desafio/data/trans_orders.csv",row.names = F,quote = F)
+
+tr=arules::read.transactions("./Dhuaz desafio/Dhuaz_desafio/data/trans_orders.csv", format = 'basket', sep=',')
+summary(tr)
+
+itemFrequencyPlot(tr,topN=20,type="relative",col=brewer.pal(8,'Pastel2'), main="Absolute Item Frequency Plot")
+
+rules=apriori(tr, parameter = list(supp=0.0001, conf=0.01,maxlen=21))
+summary(rules)
+
+inspect(rules[1:10])
+
+rules[1] %>% as.data.frame()
 
 #-----------------------------------------------------------------------------------------------------------
 raw_data %>% names()
