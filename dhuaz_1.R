@@ -118,46 +118,9 @@ group_producct=raw_data %>% group_by(product_id) %>%  summarise(n_vendas=n()
 
 
 
-#--------items comprados juntos -------------------------------------------------------------------------------------
-
-filter(raw_data, order_item_id %in% (raw_data %>% filter(order_item_id>1))$order_item_id) %>% nrow()
-
-n_products=raw_data %>% group_by(order_id) %>% dplyr::summarise(n_products=n())
-n_products_2=filter(n_products,n_products>=2)
-n_products_plus=filter(n_products,n_products>2)
-
-products=(raw_data %>% filter(order_id %in% n_products_2$order_id))$product_id %>% unique()
-
-S=length(products)
-pedidos_dummy=raw_data
-for (i in 1:S)
-{
-  #print(i)
-  #raw_data[["f64fc82a96c3d672cedd416653f65f06"]]=raw_data$product_id=="f64fc82a96c3d672cedd416653f65f06"
-  pedidos_dummy[[products[i]]]=pedidos_dummy$product_id==products[i]
-}
-
-pedidos_dummy %>% group_by(order_id) %>% summarise(sum())
-
-pedidos_dummy_s=pedidos_dummy %>% select(names(pedidos_dummy)[11:7208])
 
 
-
-pedidos_resumo=pedidos_dummy_s[1:10000,] %>% group_by(across(everything())) %>% dplyr::summarise(n=n())
-
-#-----------------------------------------------------------------------------------------------------------
-
-raw_data$product_id %>% unique() %>% length()
-
-pedidos=raw_data %>% group_by(order_id)  %>%  
-  dplyr::summarise(items=paste(sort(product_id),collapse = ","),n_items=dplyr::n()) %>% 
-  select(order_id,items,n_items)
-
-
-pedidos=pedidos %>% separate(items,sep = ",",into = paste0("item_",1:21))
-produtos=raw_data$product_id %>% unique()
-
-#------------------------item 3-------------------------------------------------------
+#------------------------items comprados juntos-------------------------------------------------------
 multi_items=filter(raw_data,order_id %in% filter(raw_data,order_item_id==2)$order_id)  
 
 multi_items %>% group_by(order_id)  %>%  
@@ -171,22 +134,53 @@ itemFrequencyPlot(tr,topN=20,type="relative",col=brewer.pal(8,'Pastel2'), main="
 
 rules=apriori(tr, parameter = list(supp=0.0001, conf=0.01,maxlen=21))
 summary(rules)
+rules_df=as(rules,"data.frame")
 
-inspect(rules[1:10])
+#--------------------------Predicction----------------------------------------------------------------
+category_vendas=raw_data %>% group_by(product_category_name) %>% summarise(vendas=sum(price)) 
 
-rules[1] %>% as.data.frame()
+# top 5 categories: relogios_presentes,beleza_saude,cama_mesa_banho,esporte_lazer,informatica_acessorios
 
-#-----------------------------------------------------------------------------------------------------------
-raw_data %>% names()
-data_dummies=raw_data  %>% fastDummies::dummy_columns(select_columns = c("seller_city"
-                                                                        ,"product_category_name"
-                                                                        ,"seller_state")
-                                        , remove_selected_columns = T)
-
-
-raw_data %>% group_by(order_id) %>% dplyr::summarise()
-
+dataset=raw_data %>% group_by(product_category_name,mes=month(order_purchase_timestamp,label = T)
+                              ,ano=year(order_purchase_timestamp)
+                              ,data=floor_date(as.Date(order_purchase_timestamp),unit = "months")) %>%  
+  dplyr::summarise(n_vendas=n()
+                   , soma_vendas=sum(price)
+                   )
 
 
+dataset$n=as.numeric((dataset$data- (dataset$data %>% min())), units="days")
+dataset=dataset[order(dataset$data),]
+dataset$predict=0
+dataset$upper=0
+dataset$lower=0
+
+dataset_relogios=dataset %>% filter(product_category_name=="relogios_presentes")
+dataset_beleza=dataset %>% filter(product_category_name=="beleza_saude")
+dataset_mesa=dataset %>% filter(product_category_name=="cama_mesa_banho")
+dataset_esporte=dataset %>% filter(product_category_name=="esporte_lazer")
+dataset_info=dataset %>% filter(product_category_name=="informatica_acessorios")
+
+
+holt_es_int<-function(dataset)
+{
+S=nrow(dataset)
+for (i in 2:S)
+{
+  print(i)
+  model <- holt(y=dataset$soma_vendas[1:i]
+                ,h = 1)
+  autoplot(model)
+  dataset[i+1,]$predict=predict(model)$mean
+  dataset[i+1,]$lower=model$lower[2]
+  dataset[i+1,]$upper=model$upper[2]
+}
+return(dataset)  
+}
+dataset_relogios=holt_es_int(dataset_relogios)
+dataset_beleza=holt_es_int(dataset_beleza)
+dataset_mesa=holt_es_int(dataset_mesa)
+dataset_esporte=holt_es_int(dataset_esporte)
+dataset_info=holt_es_int(dataset_info)
 
 
