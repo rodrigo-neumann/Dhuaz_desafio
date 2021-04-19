@@ -4,6 +4,7 @@
 # install.packages("knitr")
 #install.packages("RColorBrewer")
 # install.packages("stringr")
+install.packages("ggpubr")
 
 library(knitr)
 library(ggplot2)
@@ -16,6 +17,8 @@ library(arulesViz)
 library(readxl)
 library(RColorBrewer)
 library(tidyr)
+library(ggpubr)
+
 
 require(dplyr)
 require("forecast")
@@ -25,7 +28,7 @@ require(lubridate)
 require(fastDummies)
 
 #--------- DATA extraction----------------------
-raw_data=read.csv("./Dhuaz desafio/Dhuaz_desafio/base_desafio.csv", sep = "|")
+raw_data=read.csv("./Dhuaz desafio/Dhuaz_desafio/data/base_desafio.csv", sep = "|")
 
 #---------Data exploration----------------------
 #------ Looking for missign data
@@ -60,9 +63,14 @@ volume_venda_wday=raw_data %>%
                    ,dias=length(unique(floor_date(order_purchase_timestamp %>% as.Date(), unit = 'days'))))
 volume_venda_wday$media=volume_venda_wday$volume_vendas/volume_venda_wday$dias
 
-ggplot()+geom_line(aes(x=volume_venda_dia$dia,y=volume_venda_dia$volume_vendas),size=0.5)
+ggplot()+geom_line(aes(x=volume_venda_dia$dia,y=volume_venda_dia$volume_vendas),size=0.5)+
+  ggtitle("Volume de vendas diario") +
+  xlab("Dia") + ylab("Vendas (R$")
 
-ggplot()+geom_line(aes(x=volume_venda_mes$mes,y=volume_venda_mes$volume_vendas),size=1.5)
+ggplot()+geom_line(aes(x=volume_venda_mes$mes,y=volume_venda_mes$volume_vendas),size=1.5)+
+  ggtitle("Volume de vendas mensal") +
+  xlab("Mes") + ylab("Vendas (R$")
+  
 #-------principais produtos,vendeores,cidades------------------------------------------------------------------------------------
 
 group_seller=raw_data %>% group_by(seller_id) %>%  summarise(n_vendas=n()
@@ -103,7 +111,7 @@ group_location=raw_data %>% group_by(seller_state,seller_city) %>%  summarise(n_
 )
 
 
-group_producct=raw_data %>% group_by(product_id) %>%  summarise(n_vendas=n()
+group_product=raw_data %>% group_by(product_id) %>%  summarise(n_vendas=n()
                                                  ,n_vendas_15_dias=sum(order_purchase_timestamp>=as.Date("2018-06-30")-days(15) )
                                                  ,n_vendas_30_dias=sum(order_purchase_timestamp>=as.Date("2018-06-30")-days(30) )
                                                  ,n_vendas_60_dias=sum(order_purchase_timestamp>=as.Date("2018-06-30")-days(60) )
@@ -136,7 +144,7 @@ rules=apriori(tr, parameter = list(supp=0.0001, conf=0.01,maxlen=21))
 summary(rules)
 rules_df=as(rules,"data.frame")
 
-#--------------------------Predicction----------------------------------------------------------------
+#--------------------------Prediction----------------------------------------------------------------
 category_vendas=raw_data %>% group_by(product_category_name) %>% summarise(vendas=sum(price)) 
 
 # top 5 categories: relogios_presentes,beleza_saude,cama_mesa_banho,esporte_lazer,informatica_acessorios
@@ -178,9 +186,47 @@ for (i in 2:S)
 return(dataset)  
 }
 dataset_relogios=holt_es_int(dataset_relogios)
+dataset_relogios[nrow(dataset_relogios),]$data=as.Date('2018-07-01')
 dataset_beleza=holt_es_int(dataset_beleza)
+dataset_beleza[nrow(dataset_beleza),]$data=as.Date('2018-07-01')
 dataset_mesa=holt_es_int(dataset_mesa)
+dataset_mesa[nrow(dataset_mesa),]$data=as.Date('2018-07-01')
 dataset_esporte=holt_es_int(dataset_esporte)
+dataset_esporte[nrow(dataset_esporte),]$data=as.Date('2018-07-01')
 dataset_info=holt_es_int(dataset_info)
+dataset_info[nrow(dataset_info),]$data=as.Date('2018-07-01')
 
 
+A=ggplot()+geom_line(aes(x=dataset_relogios$data,y=dataset_relogios$soma_vendas, color="real"),size=1)+
+  geom_line(aes(x=dataset_relogios$data,y=dataset_relogios$predict, color="media"),size=1)+
+  geom_line(aes(x=dataset_relogios$data,y=dataset_relogios$upper, color="95%"),size=1)+
+  geom_line(aes(x=dataset_relogios$data,y=dataset_relogios$lower, color="5%"),size=1)+
+  ggtitle("relogios_presentes") + xlab("Mes") + ylab("Vendas (R$)")
+
+B=ggplot()+geom_line(aes(x=dataset_beleza$data,y=dataset_beleza$soma_vendas, color="real"),size=1)+
+  geom_line(aes(x=dataset_beleza$data,y=dataset_beleza$predict, color="media"),size=1)+
+  geom_line(aes(x=dataset_beleza$data,y=dataset_beleza$upper, color="95%"),size=1)+
+  geom_line(aes(x=dataset_beleza$data,y=dataset_beleza$lower, color="5%"),size=1)+
+  ggtitle("beleza_saude") + xlab("Mes") + ylab("Vendas (R$)")
+
+C=ggplot()+geom_line(aes(x=dataset_mesa$data,y=dataset_mesa$soma_vendas, color="real"),size=1)+
+  geom_line(aes(x=dataset_mesa$data,y=dataset_mesa$predict, color="media"),size=1)+
+  geom_line(aes(x=dataset_mesa$data,y=dataset_mesa$upper, color="95%"),size=1)+
+  geom_line(aes(x=dataset_mesa$data,y=dataset_mesa$lower, color="5%"),size=1)+
+  ggtitle("cama_mesa_banho") + xlab("Mes") + ylab("Vendas (R$)")
+
+D=ggplot()+geom_line(aes(x=dataset_esporte$data,y=dataset_esporte$soma_vendas, color="real"),size=1)+
+  geom_line(aes(x=dataset_esporte$data,y=dataset_esporte$predict, color="media"),size=1)+
+  geom_line(aes(x=dataset_esporte$data,y=dataset_esporte$upper, color="95%"),size=1)+
+  geom_line(aes(x=dataset_esporte$data,y=dataset_esporte$lower, color="5%"),size=1)+
+  ggtitle("esporte_lazer") + xlab("Mes") + ylab("Vendas (R$)")
+
+E=ggplot()+geom_line(aes(x=dataset_info$data,y=dataset_info$soma_vendas, color="real"),size=1)+
+  geom_line(aes(x=dataset_info$data,y=dataset_info$predict, color="media"),size=1)+
+  geom_line(aes(x=dataset_info$data,y=dataset_info$upper, color="95%"),size=1)+
+  geom_line(aes(x=dataset_info$data,y=dataset_info$lower, color="5%"),size=1)+
+  ggtitle("informatica_acessorios") + xlab("Mes") + ylab("Vendas (R$)")
+
+
+ggarrange(A,B,C,D,E 
+          ,ncol = 2, nrow = 3)
